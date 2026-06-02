@@ -100,6 +100,7 @@ def main():
     headlines = fetch_news()
     news_idx = 0
     start_time = time.time()
+    last_news_fetch = time.time()
 
     # Start caffeinate to prevent sleep
     caffeinate_proc = subprocess.Popen(
@@ -157,6 +158,14 @@ def main():
             frame_idx += 1
             if frame_idx % 10 == 0:
                 news_idx += 1
+
+            # Refresh news every 30 minutes
+            if time.time() - last_news_fetch > 1800:
+                new_headlines = fetch_news()
+                if new_headlines and new_headlines[0] != "ai news unavailable":
+                    headlines = new_headlines
+                    news_idx = 0
+                last_news_fetch = time.time()
 
             time.sleep(0.8)
 
