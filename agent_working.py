@@ -10,12 +10,14 @@ import sys
 import time
 import shutil
 import subprocess
-import signal
+import urllib.request
+import xml.etree.ElementTree as ET
 
-# Single dim color - soft blue/gray
+# Single dim color - dark red
 RESET = "\033[0m"
 DIM = "\033[2m"
 COLOR = "\033[38;5;88m"  # Dark red
+NEWS_COLOR = "\033[38;5;240m"  # Dim gray for news
 
 BANNER = r"""
 ╔══════════════════════════════════════════════════════════════════╗
@@ -37,6 +39,30 @@ BANNER = r"""
 ╚══════════════════════════════════════════════════════════════════╝
 """
 
+def fetch_news():
+    """Fetch latest news from Hacker News RSS"""
+    headlines = []
+    try:
+        url = "https://news.ycombinator.com/rss"
+        req = urllib.request.Request(url, headers={'User-Agent': 'agent-working/1.0'})
+        with urllib.request.urlopen(req, timeout=5) as response:
+            xml_data = response.read()
+
+        root = ET.fromstring(xml_data)
+        for item in root.findall('.//item')[:15]:
+            title = item.find('title')
+            if title is not None and title.text:
+                headlines.append(title.text.strip())
+    except:
+        headlines = ["could not fetch news"]
+
+    return headlines if headlines else ["no news"]
+
+def truncate_headline(headline, max_width):
+    if len(headline) <= max_width:
+        return headline
+    return headline[:max_width - 3] + "..."
+
 def clear_screen():
     os.system('clear' if os.name != 'nt' else 'cls')
 
@@ -51,14 +77,26 @@ def show_cursor():
 def get_terminal_size():
     return shutil.get_terminal_size()
 
+def format_duration(seconds):
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    if hours > 0:
+        return f"{hours}h {minutes}m"
+    return f"{minutes}m"
+
 def main():
     hide_cursor()
     frame_idx = 0
     dots_frames = ["·  ", "·· ", "···", " ··", "  ·", "   "]
 
+    # Fetch news on startup
+    headlines = fetch_news()
+    news_idx = 0
+    start_time = time.time()
+
     # Start caffeinate to prevent sleep
     caffeinate_proc = subprocess.Popen(
-        ["caffeinate", "-d"],  # -d prevents display sleep
+        ["caffeinate", "-d"],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL
     )
@@ -68,15 +106,12 @@ def main():
             clear_screen()
             cols, rows = get_terminal_size()
 
-            # Calculate vertical centering
             banner_lines = BANNER.count('\n') + 1
-            total_content_lines = banner_lines + 8
+            total_content_lines = banner_lines + 12
             top_padding = max(0, (rows - total_content_lines) // 2)
 
-            # Print top padding
             print('\n' * top_padding, end='')
 
-            # Print banner
             for line in BANNER.split('\n'):
                 padding = (cols - 70) // 2
                 print(' ' * max(0, padding) + f"{COLOR}{DIM}{line}{RESET}")
@@ -84,23 +119,39 @@ def main():
             print()
             print()
 
-            # Simple status
-            dots = dots_frames[frame_idx % len(dots_frames)]
-            status_line = f"{COLOR}{DIM}agents working {dots}{RESET}"
-            padding = (cols - 18) // 2
-            print(' ' * max(0, padding) + status_line)
+            # Timer
+            elapsed = time.time() - start_time
+            duration = format_duration(elapsed)
+            timer_line = f"{COLOR}{DIM}agents working for {duration}{RESET}"
+            padding = (cols - len(f"agents working for {duration}")) // 2
+            print(' ' * max(0, padding) + timer_line)
 
             print()
 
-            # Warning
-            warning = f"{COLOR}{DIM}please do not touch{RESET}"
-            padding = (cols - 19) // 2
-            print(' ' * max(0, padding) + warning)
+            # Status
+            dots = dots_frames[frame_idx % len(dots_frames)]
+            status_line = f"{COLOR}{DIM}please do not touch {dots}{RESET}"
+            padding = (cols - 23) // 2
+            print(' ' * max(0, padding) + status_line)
+
+            print()
+            print()
+
+            # News headline
+            current_headline = headlines[news_idx % len(headlines)]
+            max_news_width = min(cols - 10, 70)
+            truncated = truncate_headline(current_headline, max_news_width)
+            news_line = f"{NEWS_COLOR}{DIM}› {truncated}{RESET}"
+            padding = (cols - len(truncated) - 2) // 2
+            print(' ' * max(0, padding) + news_line)
 
             sys.stdout.flush()
 
             frame_idx += 1
-            time.sleep(0.8)  # Slow, calm animation
+            if frame_idx % 10 == 0:
+                news_idx += 1
+
+            time.sleep(0.8)
 
     except KeyboardInterrupt:
         pass
