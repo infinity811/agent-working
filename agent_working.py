@@ -40,23 +40,30 @@ BANNER = r"""
 """
 
 def fetch_news():
-    """Fetch latest news from Hacker News RSS"""
+    """Fetch latest AI news from TechCrunch"""
     headlines = []
-    try:
-        url = "https://news.ycombinator.com/rss"
-        req = urllib.request.Request(url, headers={'User-Agent': 'agent-working/1.0'})
-        with urllib.request.urlopen(req, timeout=5) as response:
-            xml_data = response.read()
+    feeds = [
+        "https://techcrunch.com/category/artificial-intelligence/feed/",
+        "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",
+    ]
 
-        root = ET.fromstring(xml_data)
-        for item in root.findall('.//item')[:15]:
-            title = item.find('title')
-            if title is not None and title.text:
-                headlines.append(title.text.strip())
-    except:
-        headlines = ["could not fetch news"]
+    for url in feeds:
+        try:
+            req = urllib.request.Request(url, headers={'User-Agent': 'agent-working/1.0'})
+            with urllib.request.urlopen(req, timeout=5) as response:
+                xml_data = response.read()
 
-    return headlines if headlines else ["no news"]
+            root = ET.fromstring(xml_data)
+            for item in root.findall('.//item')[:8]:
+                title = item.find('title')
+                if title is not None and title.text:
+                    headlines.append(title.text.strip())
+            if headlines:
+                break
+        except:
+            continue
+
+    return headlines if headlines else ["ai news unavailable"]
 
 def truncate_headline(headline, max_width):
     if len(headline) <= max_width:
