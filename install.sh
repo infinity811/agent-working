@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Agent Working Screensaver - Installer
-# For macOS
+# Works on macOS and Linux
 #
 
 set -e

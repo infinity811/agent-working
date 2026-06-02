@@ -10,6 +10,7 @@ import sys
 import time
 import shutil
 import subprocess
+import platform
 import urllib.request
 import xml.etree.ElementTree as ET
 
@@ -91,6 +92,27 @@ def format_duration(seconds):
         return f"{hours}h {minutes}m"
     return f"{minutes}m"
 
+def start_caffeine():
+    """Prevent sleep - works on macOS and Linux"""
+    system = platform.system()
+    try:
+        if system == "Darwin":  # macOS
+            return subprocess.Popen(
+                ["caffeinate", "-d"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+        elif system == "Linux":
+            # Try systemd-inhibit first
+            return subprocess.Popen(
+                ["systemd-inhibit", "--what=idle:sleep", "--why=agents working", "sleep", "infinity"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+    except:
+        pass
+    return None
+
 def main():
     hide_cursor()
     frame_idx = 0
@@ -102,12 +124,8 @@ def main():
     start_time = time.time()
     last_news_fetch = time.time()
 
-    # Start caffeinate to prevent sleep
-    caffeinate_proc = subprocess.Popen(
-        ["caffeinate", "-d"],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL
-    )
+    # Prevent sleep (macOS + Linux)
+    caffeine_proc = start_caffeine()
 
     try:
         while True:
@@ -172,7 +190,8 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
-        caffeinate_proc.terminate()
+        if caffeine_proc:
+            caffeine_proc.terminate()
         show_cursor()
         clear_screen()
 
