@@ -166,6 +166,32 @@ def restore_lock_message(previous):
     except OSError:
         pass
 
+def get_lid_sleep_disabled():
+    """Return current macOS 'SleepDisabled' value ('0'/'1'), or None if unknown."""
+    try:
+        out = subprocess.run(["pmset", "-g"], capture_output=True, text=True)
+        if out.returncode == 0:
+            for line in out.stdout.splitlines():
+                parts = line.split()
+                if len(parts) >= 2 and parts[0] == "SleepDisabled":
+                    return parts[1]
+            return "0"  # not listed = default (lid sleep enabled)
+    except OSError:
+        pass
+    return None
+
+def set_lid_sleep_disabled(value):
+    """Disable/enable lid-close sleep on macOS. Needs sudo. True on success.
+
+    `value` is "1" (lid close won't sleep) or "0" (normal). Lets agents keep
+    running with the lid shut - use only on power and a hard surface.
+    """
+    try:
+        r = subprocess.run(["sudo", "pmset", "-a", "disablesleep", value])
+        return r.returncode == 0
+    except OSError:
+        return False
+
 def _macos_lock_via_framework():
     """Lock instantly via login.framework's SACLockScreenImmediate.
 
@@ -232,18 +258,44 @@ def main():
         help="Lock the OS screen while keeping the machine awake so agents keep "
              "running. Nobody can touch the laptop; the agent keeps working.",
     )
+    parser.add_argument(
+        "--lid", action="store_true",
+        help="Keep working even with the lid closed (macOS: disables lid-close "
+             "sleep via pmset; needs sudo, restored on exit). Use only on power "
+             "and a hard surface - a closed lid with no airflow can overheat.",
+    )
     args = parser.parse_args()
+
+    is_macos = platform.system() == "Darwin"
 
     # macOS: put a message on the native lock screen *before* hiding the cursor,
     # so the one-time sudo prompt appears on a clean terminal.
     prev_lock_message = None
     lock_message_set = False
-    if args.lock and platform.system() == "Darwin":
+    if args.lock and is_macos:
         prev_lock_message = _get_lock_message()
         lock_message_set = set_lock_message(LOCK_MESSAGE)
         if not lock_message_set:
             sys.stderr.write("agent-working: couldn't set the lock-screen "
                              "message (needs admin); locking without it.\n")
+
+    # macOS: optionally disable lid-close sleep so agents keep running with the
+    # lid shut. Captured here so the sudo prompt shares the clean terminal.
+    prev_lid_disabled = None
+    lid_sleep_disabled = False
+    if args.lid:
+        if is_macos:
+            sys.stderr.write("agent-working: --lid keeps the Mac awake with the "
+                             "lid closed. Keep it on power and a hard surface to "
+                             "avoid overheating.\n")
+            prev_lid_disabled = get_lid_sleep_disabled()
+            lid_sleep_disabled = set_lid_sleep_disabled("1")
+            if not lid_sleep_disabled:
+                sys.stderr.write("agent-working: couldn't disable lid sleep "
+                                 "(needs admin); the Mac will sleep on lid close.\n")
+        else:
+            sys.stderr.write("agent-working: --lid is only supported on macOS; "
+                             "ignoring.\n")
 
     hide_cursor()
     frame_idx = 0
@@ -334,6 +386,8 @@ def main():
             caffeine_proc.terminate()
         if lock_message_set:
             restore_lock_message(prev_lock_message)
+        if lid_sleep_disabled:
+            set_lid_sleep_disabled(prev_lid_disabled or "0")
         show_cursor()
         clear_screen()
 

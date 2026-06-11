@@ -54,6 +54,21 @@ caffeinate keep running until you press `Ctrl+C`.
 > for `sudo` once; your previous message is restored on exit. If you decline
 > sudo, it still locks, just without the custom message.
 
+#### Lid closed
+
+By default, closing the lid sleeps the Mac (caffeinate can't override that), so
+the agent pauses. Add `--lid` to keep working with the lid shut:
+
+```bash
+agent-working --lock --lid
+```
+
+This disables lid-close sleep (`pmset disablesleep 1`, needs `sudo` once) and
+restores it on exit. macOS only.
+
+> ⚠️ A closed lid with no airflow can overheat. Use `--lid` only while on power
+> and on a hard surface - never in a bag.
+
 ## Features
 
 - Dark red, sleep-friendly display
