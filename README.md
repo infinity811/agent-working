@@ -1,6 +1,6 @@
 # Agent Working
 
-A minimal, dark-mode terminal screensaver for macOS and Linux. Perfect for when AI agents are working on your laptop and you don't want anyone to touch it.
+A minimal, dark-mode terminal screensaver for macOS and Linux. Perfect for when AI agents are working on your laptop and you don't want anyone to touch it — with an optional **real OS lock** that keeps the machine awake (and even keeps running with the lid closed) so the agent never stops.
 
 ![demo](demo.gif)
 
@@ -32,60 +32,92 @@ pipx install agent-working
 agent-working
 ```
 
-Press `Ctrl+C` to exit.
+Press `Ctrl+C` to exit. The plain command shows the animated "DO NOT TOUCH"
+display and prevents the machine from sleeping while it runs.
 
-### Lock mode
+### Options
+
+| Flag         | What it does                                                                 |
+| ------------ | ---------------------------------------------------------------------------- |
+| `--lock`     | Lock the real OS screen (password required) while keeping the system awake.  |
+| `--lid`      | Keep working even with the lid closed (macOS). Asks for confirmation first.   |
+| `-y`, `--yes`| Skip the `--lid` safety confirmation prompt (for non-interactive use).        |
+| `-h`, `--help`| Show help and exit.                                                          |
+
+These compose — the typical "leave it locked and working" invocation is:
+
+```bash
+agent-working --lock --lid
+```
+
+### Lock mode (`--lock`)
 
 ```bash
 agent-working --lock
 ```
 
 Locks the OS screen so nobody can touch the laptop, while keeping the machine
-awake so your agents keep running behind the lock screen. On macOS this keeps
-the *system* awake (`caffeinate -i`, which also works on battery) while letting
-the *display* lock; on Linux
-it inhibits idle/sleep and locks the session. Unlock normally; the timer and
-caffeinate keep running until you press `Ctrl+C`.
+awake so your agents keep running behind the lock screen.
 
-> **Note:** the lock is the real, OS-owned secure lock screen, so the animated
-> terminal display can't be drawn on top of it. On macOS, `--lock` instead sets
-> a *"agents working - please do not touch"* message on the native lock screen
-> (via `LoginwindowText`). Setting that message needs admin, so `--lock` prompts
-> for `sudo` once; your previous message is restored on exit. If you decline
-> sudo, it still locks, just without the custom message.
+- **macOS** — keeps the *system* awake with `caffeinate -i` (works on **AC and
+  battery**) while letting the *display* lock. The lock itself uses
+  `login.framework`'s `SACLockScreenImmediate` — a real, immediate, secure lock
+  with no Accessibility permission required.
+- **Linux** — inhibits idle/sleep via `systemd-inhibit` and locks the session
+  (`loginctl lock-session`, with `xdg-screensaver` / `gnome-screensaver` /
+  `dm-tool` fallbacks).
 
-#### Lid closed
+Unlock normally; the timer and caffeinate keep running until you press `Ctrl+C`.
 
-By default, closing the lid sleeps the Mac (caffeinate can't override that), so
-the agent pauses. Add `--lid` to keep working with the lid shut:
+> **Why you don't see the animation while locked:** the lock is the real,
+> OS-owned secure lock screen, and no terminal app can draw on top of it.
+> Instead, on macOS `--lock` sets a *"agents working - please do not touch"*
+> message on the native lock screen (via `LoginwindowText`). That needs admin,
+> so `--lock` prompts for `sudo` **once**; your previous message is restored on
+> exit. Decline sudo and it still locks, just without the custom message. The
+> animation reappears the moment you unlock.
+
+### Keep working with the lid closed (`--lid`)
+
+By default, closing the lid triggers clamshell sleep that `caffeinate` **cannot**
+override, so the agent pauses. Add `--lid` to keep working with the lid shut:
 
 ```bash
 agent-working --lock --lid
 ```
 
-This disables lid-close sleep (`pmset disablesleep 1`, needs `sudo` once) and
-restores it on exit. macOS only.
+This disables lid-close sleep via `pmset disablesleep 1` (needs `sudo` once) and
+**restores your previous setting automatically on exit**. macOS only — on other
+platforms the flag is ignored with a notice.
 
-`--lid` shows a prominent warning and asks for confirmation before doing
-anything. Pass `-y`/`--yes` to skip the prompt for non-interactive use; without
-a terminal to confirm, it refuses (fails safe) unless `--yes` is given.
+`--lid` shows a prominent warning and **requires explicit confirmation** before
+changing anything:
 
-> ⚠️ A closed lid with no airflow can overheat. Use `--lid` only while on power
-> and on a hard surface - never in a bag.
+- Type anything other than `y` → the lid feature is cancelled (the lock still
+  works; the Mac just sleeps on lid close).
+- No terminal to ask (piped/automated) → it **refuses** rather than silently
+  keeping the lid awake. Pass `-y`/`--yes` to accept the risk non-interactively.
+
+> ⚠️ **Heat & battery warning.** With the lid shut and no airflow, a Mac running
+> at full power can **overheat**. Use `--lid` only while **plugged into power**
+> and on a **hard, open surface** — never in a bag or under cover.
 
 ## Features
 
 - Dark red, sleep-friendly display
-- "DO NOT TOUCH" ASCII banner
-- `--lock` mode: lock the screen but stay awake so agents keep working
-- Live AI news from TechCrunch/The Verge (refreshes every 30 min)
-- Timer showing how long agents have been working
-- Auto-prevents sleep (caffeinate on macOS, systemd-inhibit on Linux)
+- "DO NOT TOUCH" ASCII banner with a live timer of how long agents have worked
+- Live AI news from TechCrunch / The Verge (refreshes every 30 min)
+- Prevents sleep automatically (caffeinate on macOS, `systemd-inhibit` on Linux)
+- `--lock` — real secure OS lock + custom lock-screen message, while staying
+  awake on AC **and** battery
+- `--lid` — keep agents running with the lid closed (macOS), with a mandatory
+  safety confirmation and automatic restore on exit
 
 ## Requirements
 
 - macOS or Linux
 - Python 3.8+
+- `--lock` message and `--lid` use `sudo` on macOS (you'll be prompted once)
 
 ## License
 
