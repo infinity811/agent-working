@@ -248,6 +248,39 @@ def lock_screen():
             continue
     return False
 
+LID_WARNING = """
+\033[1;33m┌──────────────────────────────────────────────────────────────┐
+│  ⚠  WARNING: --lid disables lid-close sleep                   │
+│                                                              │
+│  Your Mac will KEEP RUNNING AT FULL POWER with the lid shut. │
+│                                                              │
+│    • Keep it plugged into power.                             │
+│    • Keep it on a hard, open surface for airflow.            │
+│    • NEVER put it in a bag or under cover while running.     │
+│                                                              │
+│  A closed lid with no airflow can OVERHEAT the machine.      │
+│  Normal sleep is restored automatically when you exit.       │
+└──────────────────────────────────────────────────────────────┘\033[0m
+"""
+
+def _confirm_lid(assume_yes):
+    """Show the lid warning and require explicit confirmation. True to proceed."""
+    sys.stderr.write(LID_WARNING + "\n")
+    sys.stderr.flush()
+    if assume_yes:
+        sys.stderr.write("Proceeding (--yes given).\n")
+        return True
+    if not sys.stdin.isatty():
+        # No way to ask - fail safe rather than silently keeping the lid awake.
+        sys.stderr.write("Refusing --lid without a terminal to confirm; "
+                         "re-run with --yes to accept the risk.\n")
+        return False
+    try:
+        answer = input("Continue with the lid feature? [y/N] ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        return False
+    return answer in ("y", "yes")
+
 def main():
     parser = argparse.ArgumentParser(
         prog="agent-working",
@@ -263,6 +296,10 @@ def main():
         help="Keep working even with the lid closed (macOS: disables lid-close "
              "sleep via pmset; needs sudo, restored on exit). Use only on power "
              "and a hard surface - a closed lid with no airflow can overheat.",
+    )
+    parser.add_argument(
+        "-y", "--yes", action="store_true",
+        help="Skip the --lid safety confirmation prompt (for non-interactive use).",
     )
     args = parser.parse_args()
 
@@ -285,14 +322,16 @@ def main():
     lid_sleep_disabled = False
     if args.lid:
         if is_macos:
-            sys.stderr.write("agent-working: --lid keeps the Mac awake with the "
-                             "lid closed. Keep it on power and a hard surface to "
-                             "avoid overheating.\n")
-            prev_lid_disabled = get_lid_sleep_disabled()
-            lid_sleep_disabled = set_lid_sleep_disabled("1")
-            if not lid_sleep_disabled:
-                sys.stderr.write("agent-working: couldn't disable lid sleep "
-                                 "(needs admin); the Mac will sleep on lid close.\n")
+            if _confirm_lid(args.yes):
+                prev_lid_disabled = get_lid_sleep_disabled()
+                lid_sleep_disabled = set_lid_sleep_disabled("1")
+                if not lid_sleep_disabled:
+                    sys.stderr.write("agent-working: couldn't disable lid sleep "
+                                     "(needs admin); the Mac will sleep on lid "
+                                     "close.\n")
+            else:
+                sys.stderr.write("agent-working: --lid cancelled; the Mac will "
+                                 "sleep on lid close.\n")
         else:
             sys.stderr.write("agent-working: --lid is only supported on macOS; "
                              "ignoring.\n")

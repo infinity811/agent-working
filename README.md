@@ -66,6 +66,10 @@ agent-working --lock --lid
 This disables lid-close sleep (`pmset disablesleep 1`, needs `sudo` once) and
 restores it on exit. macOS only.
 
+`--lid` shows a prominent warning and asks for confirmation before doing
+anything. Pass `-y`/`--yes` to skip the prompt for non-interactive use; without
+a terminal to confirm, it refuses (fails safe) unless `--yes` is given.
+
 > ⚠️ A closed lid with no airflow can overheat. Use `--lid` only while on power
 > and on a hard surface - never in a bag.
 
